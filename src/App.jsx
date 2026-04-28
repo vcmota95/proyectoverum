@@ -1,4 +1,6 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { PushNotifications } from '@capacitor/push-notifications';
+import { Capacitor } from '@capacitor/core';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 
@@ -61,6 +63,30 @@ const ProtectedRoute = ({ children }) => {
 
 const App = () => {
   const { user, loading } = useAuth();
+
+  useEffect(() => {
+    const setupPushNotifications = async () => {
+      if (Capacitor.isNativePlatform()) {
+        try {
+          let permStatus = await PushNotifications.checkPermissions();
+          if (permStatus.receive === 'prompt') {
+            permStatus = await PushNotifications.requestPermissions();
+          }
+          if (permStatus.receive === 'granted') {
+            await PushNotifications.register();
+            
+            PushNotifications.addListener('registration', (token) => {
+              console.log('Push registration success, token: ' + token.value);
+            });
+          }
+        } catch (e) {
+          console.error('Push notification setup failed:', e);
+        }
+      }
+    };
+    
+    setupPushNotifications();
+  }, []);
 
   if (loading) {
     return (

@@ -3,6 +3,7 @@ import { PushNotifications } from '@capacitor/push-notifications';
 import { Capacitor } from '@capacitor/core';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
+import { supabase } from './services/supabase'; // << LINHA ADICIONADA
 
 // Screens
 import LoginScreen from './screens/LoginScreen';
@@ -75,9 +76,20 @@ const App = () => {
           if (permStatus.receive === 'granted') {
             await PushNotifications.register();
             
-            PushNotifications.addListener('registration', (token) => {
-              console.log('Push registration success, token: ' + token.value);
-            });
+            // << TRECHO MODIFICADO: agora salva o token no banco >>
+PushNotifications.addListener('registration', async (token) => {
+  console.log('Token FCM recebido:', token.value);
+  // Salva o token no Supabase para poder enviar notificações
+  const { data: { user } } = await supabase.auth.getUser();
+  if (user) {
+    await supabase
+      .from('profiles')
+      .update({ fcm_token: token.value })
+      .eq('id', user.id);
+    console.log('Token salvo no banco com sucesso!');
+  }
+});
+            // << FIM DO TRECHO MODIFICADO >>
           }
         } catch (e) {
           console.error('Push notification setup failed:', e);

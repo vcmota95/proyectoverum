@@ -1,9 +1,9 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { PushNotifications } from '@capacitor/push-notifications';
 import { Capacitor } from '@capacitor/core';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
-import { supabase } from './services/supabase'; // << LINHA ADICIONADA
+import { supabase } from './services/supabase';
 
 // Screens
 import LoginScreen from './screens/LoginScreen';
@@ -64,7 +64,9 @@ const ProtectedRoute = ({ children }) => {
 
 const App = () => {
   const { user, loading } = useAuth();
+  const fcmTokenRef = useRef(null); // guarda o token enquanto espera o login
 
+  // Configura as notificações quando o app abre
   useEffect(() => {
     const setupPushNotifications = async () => {
       if (Capacitor.isNativePlatform()) {
@@ -76,20 +78,23 @@ const App = () => {
           if (permStatus.receive === 'granted') {
             await PushNotifications.register();
             
-            // << TRECHO MODIFICADO: agora salva o token no banco >>
-PushNotifications.addListener('registration', async (token) => {
-  console.log('Token FCM recebido:', token.value);
-  // Salva o token no Supabase para poder enviar notificações
-  const { data: { user } } = await supabase.auth.getUser();
-  if (user) {
-    await supabase
-      .from('profiles')
-      .update({ fcm_token: token.value })
-      .eq('id', user.id);
-    console.log('Token salvo no banco com sucesso!');
-  }
-});
-            // << FIM DO TRECHO MODIFICADO >>
+            PushNotifications.addListener('registration', async (token) => {
+              console.log('Token FCM recebido:', token.value);
+              // Guarda o token na memória — vai ser salvo quando o usuário logar
+              fcmTokenRef.current = token.value;
+              
+              // Se o usuário já estiver logado, salva agora
+              const { data: { user: currentUser } } = await supabase.auth.getUser();
+              if (currentUser) {
+                await supabase
+                  .from('profiles')
+                  .update({ fcm_token: token.value })
+                  .eq('id', currentUser.id);
+                console.log('Token salvo no banco (usuário já logado)!');
+              } else {
+                console.log('Usuário ainda não logado, token guardado para depois.');
+              }
+            });
           }
         } catch (e) {
           console.error('Push notification setup failed:', e);
@@ -99,6 +104,20 @@ PushNotifications.addListener('registration', async (token) => {
     
     setupPushNotifications();
   }, []);
+
+  // Quando o usuário loga, salva o token que estava esperando
+  useEffect(() => {
+    const saveTokenAfterLogin = async () => {
+      if (user && fcmTokenRef.current) {
+        await supabase
+          .from('profiles')
+          .update({ fcm_token: fcmTokenRef.current })
+          .eq('id', user.id);
+        console.log('Token salvo no banco após login!');
+      }
+    };
+    saveTokenAfterLogin();
+  }, [user]);
 
   if (loading) {
     return (

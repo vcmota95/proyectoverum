@@ -1,0 +1,9 @@
+{
+  "appId": "com.verum.app",
+  "appName": "Verum",
+  "webDir": "dist",
+  "server": {
+    "url": "https://verum-app.vercel.app",
+    "cleartext": true
+  }
+}
